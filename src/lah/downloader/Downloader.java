@@ -13,12 +13,6 @@ import android.net.Uri;
 
 public class Downloader {
 
-	Context context;
-
-	public Downloader(Context ctx) {
-		context = ctx;
-	}
-
 	private class DownloadBroadcastReceiver extends BroadcastReceiver {
 
 		@Override
@@ -41,7 +35,17 @@ public class Downloader {
 				} else {
 					download_finish = true;
 					if (status == DownloadManager.STATUS_SUCCESSFUL) {
-						System.out.println("Download successfully completes.");
+						Uri local_uri = manager
+								.getUriForDownloadedFile(download_id);
+						if (local_uri != null) {
+							System.out
+									.println("Download successfully completes: "
+											+ local_uri);
+							File download_file = new File(local_uri.getPath());
+							System.out.println("Rename file: " + download_file + " to " + download_result);
+							download_file.renameTo(download_result);
+							System.out.println(download_result.exists());
+						}
 					} else if (status == DownloadManager.STATUS_FAILED) {
 						System.out.println("Fail: " + reason);
 						download_result = null;
@@ -56,6 +60,8 @@ public class Downloader {
 
 	}
 
+	Context context;
+
 	boolean download_finish;
 
 	long download_id;
@@ -66,7 +72,8 @@ public class Downloader {
 
 	DownloadManager manager;
 
-	public Downloader() {
+	public Downloader(Context ctx) {
+		context = ctx;
 		manager = (DownloadManager) context
 				.getSystemService(Context.DOWNLOAD_SERVICE);
 	}
