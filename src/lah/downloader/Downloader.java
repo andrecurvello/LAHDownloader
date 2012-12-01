@@ -30,10 +30,11 @@ public class Downloader {
 				int reason = cursor.getInt(columnReason);
 				if (status == DownloadManager.STATUS_RUNNING) {
 					System.out.println("Running");
+				} else if (status == DownloadManager.STATUS_PAUSED) {
+					System.out.println("Pause: " + reason);
 				} else if (status == DownloadManager.STATUS_PENDING) {
 					System.out.println("Pending");
 				} else {
-					download_finish = true;
 					if (status == DownloadManager.STATUS_SUCCESSFUL) {
 						Uri local_uri = manager
 								.getUriForDownloadedFile(download_id);
@@ -41,19 +42,16 @@ public class Downloader {
 							System.out
 									.println("Download successfully completes: "
 											+ local_uri);
-							File download_file = new File(local_uri.getPath());
-							System.out.println("Rename file: " + download_file + " to " + download_result);
-							download_file.renameTo(download_result);
-							System.out.println(download_result.exists());
-						}
+							original_download_file = new File(
+									local_uri.getPath());
+						} else
+							original_download_file = null;
 					} else if (status == DownloadManager.STATUS_FAILED) {
 						System.out.println("Fail: " + reason);
-						download_result = null;
-					} else if (status == DownloadManager.STATUS_PAUSED) {
-						System.out.println("Pause: " + reason);
-						download_result = null;
+						original_download_file = null;
 					}
 					context.unregisterReceiver(this);
+					download_finish = true;
 				}
 			}
 		}
@@ -67,6 +65,8 @@ public class Downloader {
 	long download_id;
 
 	File download_result;
+
+	File original_download_file;
 
 	private BroadcastReceiver downloadReceiver = new DownloadBroadcastReceiver();
 
@@ -95,6 +95,15 @@ public class Downloader {
 		download_finish = false;
 		while (!download_finish)
 			Thread.sleep(500);
+		if (original_download_file != null) {
+			if (!original_download_file.getAbsolutePath().equals(
+					download_result.getAbsolutePath()))
+				System.out.println("Rename file: " + original_download_file
+						+ " to " + download_result + " : "
+						+ original_download_file.renameTo(download_result));
+		} else
+			download_result = null;
+		System.out.println(download_result.exists());
 		return download_result;
 	}
 
