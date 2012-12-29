@@ -20,7 +20,7 @@ public class Downloader {
 			// System.out.println("Notification received.");
 			DownloadManager.Query query = new DownloadManager.Query();
 			query.setFilterById(download_id);
-			Cursor cursor = manager.query(query);
+			Cursor cursor = download_manager.query(query);
 			if (cursor.moveToFirst()) {
 				int columnIndex = cursor
 						.getColumnIndex(DownloadManager.COLUMN_STATUS);
@@ -35,21 +35,20 @@ public class Downloader {
 				} else if (status == DownloadManager.STATUS_PENDING) {
 					// System.out.println("Pending");
 				} else {
-					if (status == DownloadManager.STATUS_SUCCESSFUL) {
-						Uri local_uri = manager
-								.getUriForDownloadedFile(download_id);
-						if (local_uri != null) {
-							// System.out
-							// .println("Download successfully completes: "
-							// + local_uri);
-							original_download_file = new File(
-									local_uri.getPath());
-						} else
-							original_download_file = null;
-					} else if (status == DownloadManager.STATUS_FAILED) {
-						// System.out.println("Fail: " + reason);
-						original_download_file = null;
-					}
+					// if (status == DownloadManager.STATUS_SUCCESSFUL) {
+					// Uri local_uri = manager
+					// .getUriForDownloadedFile(download_id);
+					// if (local_uri != null) {
+					// // System.out
+					// // .println("Download successfully completes: "
+					// // + local_uri);
+					// original_download_file = new File(
+					// local_uri.getPath());
+					// } else
+					// original_download_file = null;
+					// } else if (status == DownloadManager.STATUS_FAILED) {
+					// original_download_file = null;
+					// }
 					context.unregisterReceiver(this);
 					download_finish = true;
 				}
@@ -68,13 +67,13 @@ public class Downloader {
 
 	File original_download_file;
 
-	private BroadcastReceiver downloadReceiver = new DownloadBroadcastReceiver();
+	private BroadcastReceiver download_receiver = new DownloadBroadcastReceiver();
 
-	DownloadManager manager;
+	DownloadManager download_manager;
 
 	public Downloader(Context ctx) {
 		context = ctx;
-		manager = (DownloadManager) context
+		download_manager = (DownloadManager) context
 				.getSystemService(Context.DOWNLOAD_SERVICE);
 	}
 
@@ -86,26 +85,30 @@ public class Downloader {
 
 		Request request = new Request(Uri.parse(uri));
 		request.setTitle(file_name);
-		request.setDestinationInExternalFilesDir(context, null, "/" + file_name);
-		download_id = manager.enqueue(request);
+		// request.setDestinationInExternalFilesDir(context, null, "/" +
+		// file_name);
+		Uri download_result_uri = Uri.fromFile(download_result);
+		System.out.println("Download to " + download_result_uri);
+		request.setDestinationUri(download_result_uri);
+		download_id = download_manager.enqueue(request);
 		// System.out.println(download_id);
 		IntentFilter intent_filter = new IntentFilter(
 				DownloadManager.ACTION_DOWNLOAD_COMPLETE);
-		context.registerReceiver(downloadReceiver, intent_filter);
+		context.registerReceiver(download_receiver, intent_filter);
 		download_finish = false;
 		while (!download_finish)
 			Thread.sleep(500);
-		if (original_download_file != null) {
-			if (!original_download_file.getAbsolutePath().equals(
-					download_result.getAbsolutePath()))
-				// System.out.println("Rename file: " + original_download_file
-				// + " to " + download_result + " : "
-				// + );
-				original_download_file.renameTo(download_result);
-		} else
-			download_result = null;
+		// if (original_download_file != null) {
+		// if (!original_download_file.getAbsolutePath().equals(
+		// download_result.getAbsolutePath()))
+		// // System.out.println("Rename file: " + original_download_file
+		// // + " to " + download_result + " : "
+		// // + );
+		// original_download_file.renameTo(download_result);
+		// } else
+		// download_result = null;
 		// System.out.println(download_result.exists());
-		return download_result;
+		return download_result.exists() ? download_result : null;
 	}
 
 }
