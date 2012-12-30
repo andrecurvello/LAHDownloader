@@ -88,7 +88,7 @@ public class Downloader {
 		// request.setDestinationInExternalFilesDir(context, null, "/" +
 		// file_name);
 		Uri download_result_uri = Uri.fromFile(download_result);
-		System.out.println("Download to " + download_result_uri);
+		// System.out.println("Download to " + download_result_uri);
 		request.setDestinationUri(download_result_uri);
 		download_id = download_manager.enqueue(request);
 		// System.out.println(download_id);
