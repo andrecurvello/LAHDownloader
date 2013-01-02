@@ -16,8 +16,7 @@ public class Downloader {
 	private class DownloadBroadcastReceiver extends BroadcastReceiver {
 
 		@Override
-		public void onReceive(Context arg0, Intent arg1) {
-			// System.out.println("Notification received.");
+		public void onReceive(Context ctx, Intent intent) {
 			DownloadManager.Query query = new DownloadManager.Query();
 			query.setFilterById(download_id);
 			Cursor cursor = download_manager.query(query);
@@ -25,30 +24,18 @@ public class Downloader {
 				int columnIndex = cursor
 						.getColumnIndex(DownloadManager.COLUMN_STATUS);
 				int status = cursor.getInt(columnIndex);
-				// int columnReason = cursor
-				// .getColumnIndex(DownloadManager.COLUMN_REASON);
-				// int reason = cursor.getInt(columnReason);
-				if (status == DownloadManager.STATUS_RUNNING) {
-					// System.out.println("Running");
-				} else if (status == DownloadManager.STATUS_PAUSED) {
-					// System.out.println("Pause: " + reason);
-				} else if (status == DownloadManager.STATUS_PENDING) {
-					// System.out.println("Pending");
-				} else {
-					// if (status == DownloadManager.STATUS_SUCCESSFUL) {
-					// Uri local_uri = manager
-					// .getUriForDownloadedFile(download_id);
-					// if (local_uri != null) {
-					// // System.out
-					// // .println("Download successfully completes: "
-					// // + local_uri);
-					// original_download_file = new File(
-					// local_uri.getPath());
-					// } else
-					// original_download_file = null;
-					// } else if (status == DownloadManager.STATUS_FAILED) {
-					// original_download_file = null;
-					// }
+
+				// set the flag download_finish appropriately
+				switch (status) {
+				// download is not done
+				case DownloadManager.STATUS_RUNNING:
+				case DownloadManager.STATUS_PAUSED:
+				case DownloadManager.STATUS_PENDING:
+					break;
+				// download is done
+				case DownloadManager.STATUS_SUCCESSFUL:
+				case DownloadManager.STATUS_FAILED:
+				default:
 					context.unregisterReceiver(this);
 					download_finish = true;
 				}
@@ -57,57 +44,63 @@ public class Downloader {
 
 	}
 
-	Context context;
+	private static final IntentFilter intent_filter = new IntentFilter(
+			DownloadManager.ACTION_DOWNLOAD_COMPLETE);
 
-	boolean download_finish;
+	private Context context;
 
-	long download_id;
+	private boolean download_finish;
 
-	File download_result;
+	private long download_id;
 
-	File original_download_file;
+	private final DownloadManager download_manager;
 
-	private BroadcastReceiver download_receiver = new DownloadBroadcastReceiver();
+	private final BroadcastReceiver download_receiver;
 
-	DownloadManager download_manager;
+	private File download_result;
 
 	public Downloader(Context ctx) {
 		context = ctx;
 		download_manager = (DownloadManager) context
 				.getSystemService(Context.DOWNLOAD_SERVICE);
+		download_receiver = new DownloadBroadcastReceiver();
 	}
 
+	/**
+	 * Download a file
+	 * 
+	 * @param uri
+	 *            URI of the file
+	 * @param file_name
+	 *            The name of the download file
+	 * @return a {@link File} representing the download result or
+	 *         {@literal null} if the download fails
+	 * @throws Exception
+	 */
 	public File downloadFile(String uri, String file_name) throws Exception {
+		// The expected result download file
 		download_result = new File(context.getExternalFilesDir(null) + "/"
 				+ file_name);
+
+		// Return the file if it is already there
 		if (download_result.exists())
 			return download_result;
 
+		// File is not there yet, request it
 		Request request = new Request(Uri.parse(uri));
 		request.setTitle(file_name);
-		// request.setDestinationInExternalFilesDir(context, null, "/" +
-		// file_name);
 		Uri download_result_uri = Uri.fromFile(download_result);
-		// System.out.println("Download to " + download_result_uri);
 		request.setDestinationUri(download_result_uri);
 		download_id = download_manager.enqueue(request);
-		// System.out.println(download_id);
-		IntentFilter intent_filter = new IntentFilter(
-				DownloadManager.ACTION_DOWNLOAD_COMPLETE);
 		context.registerReceiver(download_receiver, intent_filter);
+
+		// Waiting until the download is done (successful|fail)
 		download_finish = false;
-		while (!download_finish)
-			Thread.sleep(500);
-		// if (original_download_file != null) {
-		// if (!original_download_file.getAbsolutePath().equals(
-		// download_result.getAbsolutePath()))
-		// // System.out.println("Rename file: " + original_download_file
-		// // + " to " + download_result + " : "
-		// // + );
-		// original_download_file.renameTo(download_result);
-		// } else
-		// download_result = null;
-		// System.out.println(download_result.exists());
+		while (!download_finish) {
+			Thread.yield();
+		}
+
+		// Download result does not exist means failure
 		return download_result.exists() ? download_result : null;
 	}
 
