@@ -47,7 +47,7 @@ public class Downloader {
 	private static final IntentFilter intent_filter = new IntentFilter(
 			DownloadManager.ACTION_DOWNLOAD_COMPLETE);
 
-	private Context context;
+	private final Context context;
 
 	private boolean download_finish;
 
@@ -56,8 +56,6 @@ public class Downloader {
 	private final DownloadManager download_manager;
 
 	private final BroadcastReceiver download_receiver;
-
-	private File download_result;
 
 	public Downloader(Context ctx) {
 		context = ctx;
@@ -79,8 +77,8 @@ public class Downloader {
 	 */
 	public File downloadFile(String uri, String file_name) throws Exception {
 		// The expected result download file
-		download_result = new File(context.getExternalFilesDir(null) + "/"
-				+ file_name);
+		File download_result = new File(context.getExternalFilesDir(null) + "/"
+				+ file_name).getAbsoluteFile();
 
 		// Return the file if it is already there
 		if (download_result.exists())
