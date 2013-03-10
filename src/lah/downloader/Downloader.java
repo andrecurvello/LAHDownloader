@@ -2,6 +2,7 @@ package lah.downloader;
 
 import java.io.File;
 
+import android.annotation.TargetApi;
 import android.app.DownloadManager;
 import android.app.DownloadManager.Request;
 import android.content.BroadcastReceiver;
@@ -10,7 +11,14 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 
+/**
+ * Blocking file download object using the system downloader
+ * 
+ * @author L.A.H.
+ * 
+ */
 public class Downloader {
 
 	private class DownloadBroadcastReceiver extends BroadcastReceiver {
@@ -57,11 +65,14 @@ public class Downloader {
 
 	private final BroadcastReceiver download_receiver;
 
+	private boolean show_in_system;
+
 	public Downloader(Context ctx) {
 		context = ctx;
 		download_manager = (DownloadManager) context
 				.getSystemService(Context.DOWNLOAD_SERVICE);
 		download_receiver = new DownloadBroadcastReceiver();
+		show_in_system = true;
 	}
 
 	/**
@@ -75,6 +86,8 @@ public class Downloader {
 	 *         {@literal null} if the download fails
 	 * @throws Exception
 	 */
+	@SuppressWarnings("deprecation")
+	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
 	public File downloadFile(String uri, String file_name) throws Exception {
 		// The expected result download file
 		File download_result = new File(context.getExternalFilesDir(null) + "/"
@@ -89,9 +102,17 @@ public class Downloader {
 		request.setTitle(file_name);
 		Uri download_result_uri = Uri.fromFile(download_result);
 		request.setDestinationUri(download_result_uri);
+		if (!show_in_system) {
+			// disable show in the Downloads app
+			request.setVisibleInDownloadsUi(false);
+			// disable show download progress in the system notification
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB)
+				request.setNotificationVisibility(Request.VISIBILITY_HIDDEN);
+			else
+				request.setShowRunningNotification(false);
+		}
 		download_id = download_manager.enqueue(request);
 		context.registerReceiver(download_receiver, intent_filter);
-
 		// Waiting until the download is done (successful|fail)
 		download_finish = false;
 		while (!download_finish) {
