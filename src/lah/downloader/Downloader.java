@@ -29,8 +29,7 @@ public class Downloader {
 			query.setFilterById(download_id);
 			Cursor cursor = download_manager.query(query);
 			if (cursor.moveToFirst()) {
-				int columnIndex = cursor
-						.getColumnIndex(DownloadManager.COLUMN_STATUS);
+				int columnIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
 				int status = cursor.getInt(columnIndex);
 
 				// set the flag download_finish appropriately
@@ -52,8 +51,7 @@ public class Downloader {
 
 	}
 
-	private static final IntentFilter intent_filter = new IntentFilter(
-			DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+	private final IntentFilter intent_filter;
 
 	private final Context context;
 
@@ -65,14 +63,12 @@ public class Downloader {
 
 	private final BroadcastReceiver download_receiver;
 
-	private boolean show_in_system;
-
-	public Downloader(Context ctx) {
-		context = ctx;
-		download_manager = (DownloadManager) context
-				.getSystemService(Context.DOWNLOAD_SERVICE);
+	public Downloader(Context context) {
+		assert context != null;
+		this.context = context;
+		download_manager = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
 		download_receiver = new DownloadBroadcastReceiver();
-		show_in_system = true;
+		intent_filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
 	}
 
 	/**
@@ -80,29 +76,26 @@ public class Downloader {
 	 * 
 	 * @param uri
 	 *            URI of the file
-	 * @param file_name
-	 *            The name of the download file
-	 * @return a {@link File} representing the download result or
-	 *         {@literal null} if the download fails
+	 * @param outputFile
+	 *            The expected file after the download completes
+	 * @param showInNotification
+	 *            Flag to indicate whether this should hide the running download in system notification area
+	 * @return a {@link File} representing the download result or {@literal null} if the download fails
 	 * @throws Exception
 	 */
 	@SuppressWarnings("deprecation")
 	@TargetApi(Build.VERSION_CODES.HONEYCOMB)
-	public File downloadFile(String uri, String file_name) throws Exception {
-		// The expected result download file
-		File download_result = new File(context.getExternalFilesDir(null) + "/"
-				+ file_name).getAbsoluteFile();
-
+	public File downloadFile(String uri, File outputFile, boolean showInNotification) throws Exception {
 		// Return the file if it is already there
-		if (download_result.exists())
-			return download_result;
+		if (outputFile == null || outputFile.exists())
+			return outputFile;
 
 		// File is not there yet, request it
 		Request request = new Request(Uri.parse(uri));
-		request.setTitle(file_name);
-		Uri download_result_uri = Uri.fromFile(download_result);
-		request.setDestinationUri(download_result_uri);
-		if (!show_in_system) {
+		request.setTitle(outputFile.getName());
+		Uri outputFileUri = Uri.fromFile(outputFile);
+		request.setDestinationUri(outputFileUri);
+		if (!showInNotification) {
 			// disable show in the Downloads app
 			request.setVisibleInDownloadsUi(false);
 			// disable show download progress in the system notification
@@ -113,14 +106,15 @@ public class Downloader {
 		}
 		download_id = download_manager.enqueue(request);
 		context.registerReceiver(download_receiver, intent_filter);
+		
 		// Waiting until the download is done (successful|fail)
 		download_finish = false;
 		while (!download_finish) {
 			Thread.yield();
 		}
-
+		
 		// Download result does not exist means failure
-		return download_result.exists() ? download_result : null;
+		return outputFile.exists() ? outputFile : null;
 	}
 
 }
