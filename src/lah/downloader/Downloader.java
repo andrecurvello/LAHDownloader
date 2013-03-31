@@ -1,6 +1,8 @@
 package lah.downloader;
 
 import java.io.File;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import android.annotation.TargetApi;
 import android.app.DownloadManager;
@@ -9,66 +11,59 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 
 /**
- * Blocking file download object using the system downloader
+ * Blocking file download object using the Android system downloader
  * 
  * @author L.A.H.
  * 
  */
 public class Downloader {
 
-	private class DownloadBroadcastReceiver extends BroadcastReceiver {
+	/**
+	 * {@link BroadcastReceiver} binds to the ACTION_DOWNLOAD_COMPLETE intent raised by {@link DownloadManager}
+	 * 
+	 * @author L.A.H.
+	 * 
+	 */
+	private class DownloadCompleteBroadcastReceiver extends BroadcastReceiver {
 
 		@Override
 		public void onReceive(Context ctx, Intent intent) {
-			DownloadManager.Query query = new DownloadManager.Query();
-			query.setFilterById(download_id);
-			Cursor cursor = download_manager.query(query);
-			if (cursor.moveToFirst()) {
-				int columnIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
-				int status = cursor.getInt(columnIndex);
-
-				// set the flag download_finish appropriately
-				switch (status) {
-				// download is not done
-				case DownloadManager.STATUS_RUNNING:
-				case DownloadManager.STATUS_PAUSED:
-				case DownloadManager.STATUS_PENDING:
-					break;
-				// download is done
-				case DownloadManager.STATUS_SUCCESSFUL:
-				case DownloadManager.STATUS_FAILED:
-				default:
-					context.unregisterReceiver(this);
-					download_finish = true;
-				}
-			}
+			// Get the ID of the completed donwload
+			long download_id = intent.getExtras().getLong(DownloadManager.EXTRA_DOWNLOAD_ID);
+			// Set the flag appropriately
+			if (completion_status_map.containsKey(download_id))
+				completion_status_map.put(download_id, true);
 		}
 
 	}
 
+	/**
+	 * Map from Download ID to {true, false} indicating if the download is completed by the {@link DownloadManager}
+	 */
+	private final ConcurrentMap<Long, Boolean> completion_status_map;
+
+	/**
+	 * {@link IntentFilter} to filter out download complete actions
+	 */
 	private final IntentFilter intent_filter;
 
 	private final Context context;
 
-	private boolean download_finish;
-
-	private long download_id;
-
 	private final DownloadManager download_manager;
 
-	private final BroadcastReceiver download_receiver;
+	private final DownloadCompleteBroadcastReceiver download_receiver;
 
 	public Downloader(Context context) {
 		assert context != null;
 		this.context = context;
 		download_manager = (DownloadManager) context.getSystemService(Context.DOWNLOAD_SERVICE);
-		download_receiver = new DownloadBroadcastReceiver();
+		download_receiver = new DownloadCompleteBroadcastReceiver();
 		intent_filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+		completion_status_map = new ConcurrentHashMap<Long, Boolean>();
 	}
 
 	/**
@@ -80,7 +75,7 @@ public class Downloader {
 	 *            The expected file after the download completes
 	 * @param showInNotification
 	 *            Flag to indicate whether this should hide the running download in system notification area
-	 * @return a {@link File} representing the download result or {@literal null} if the download fails
+	 * @return the input {@code outputFile} representing the download result or {@literal null} if the download fails
 	 * @throws Exception
 	 */
 	@SuppressWarnings("deprecation")
@@ -104,15 +99,22 @@ public class Downloader {
 			else
 				request.setShowRunningNotification(false);
 		}
-		download_id = download_manager.enqueue(request);
+		long download_id = download_manager.enqueue(request);
 		context.registerReceiver(download_receiver, intent_filter);
-		
-		// Waiting until the download is done (successful|fail)
-		download_finish = false;
-		while (!download_finish) {
+
+		// Waiting until the download manager completes the request (successful|fail)
+		completion_status_map.put(download_id, false);
+		while (!completion_status_map.get(download_id)) {
 			Thread.yield();
 		}
-		
+
+		// Download is completed
+		completion_status_map.remove(download_id);
+
+		// Unregister the receiver if there is no more submitted requests
+		if (completion_status_map.isEmpty())
+			context.unregisterReceiver(download_receiver);
+
 		// Download result does not exist means failure
 		return outputFile.exists() ? outputFile : null;
 	}
