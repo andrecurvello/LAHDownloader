@@ -105,6 +105,11 @@ public class Downloader {
 		// Waiting until the download manager completes the request (successful|fail)
 		completion_status_map.put(download_id, false);
 		while (!completion_status_map.get(download_id)) {
+			if (Thread.interrupted()) {
+				download_manager.remove(download_id);
+				completion_status_map.remove(download_id);
+				throw new InterruptedException("Download is interrupted!");
+			}
 			Thread.yield();
 		}
 
