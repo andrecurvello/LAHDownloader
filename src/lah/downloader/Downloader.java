@@ -11,6 +11,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 
@@ -32,9 +33,16 @@ public class Downloader {
 
 		@Override
 		public void onReceive(Context ctx, Intent intent) {
-			// Get the ID of the completed donwload
+			// Get the ID of the completed download
 			long download_id = intent.getExtras().getLong(DownloadManager.EXTRA_DOWNLOAD_ID);
-			// Set the flag appropriately
+			// Delete the file if the download fails
+			Cursor c = download_manager.query(new DownloadManager.Query().setFilterById(download_id));
+			int download_status = c.getInt(c.getColumnIndex(DownloadManager.COLUMN_STATUS));
+			if (download_status == DownloadManager.STATUS_FAILED) {
+				File output = download_file_map.get(download_id);
+				output.delete();
+			}
+			// Set the flag to notify downloadFile
 			if (completion_status_map.containsKey(download_id))
 				completion_status_map.put(download_id, true);
 		}
@@ -45,6 +53,11 @@ public class Downloader {
 	 * Map from Download ID to {true, false} indicating if the download is completed by the {@link DownloadManager}
 	 */
 	private final ConcurrentMap<Long, Boolean> completion_status_map;
+
+	/**
+	 * Map Download ID to result file
+	 */
+	private final ConcurrentMap<Long, File> download_file_map;
 
 	/**
 	 * {@link IntentFilter} to filter out download complete actions
@@ -64,6 +77,7 @@ public class Downloader {
 		download_receiver = new DownloadCompleteBroadcastReceiver();
 		intent_filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
 		completion_status_map = new ConcurrentHashMap<Long, Boolean>();
+		download_file_map = new ConcurrentHashMap<Long, File>();
 	}
 
 	/**
@@ -104,6 +118,7 @@ public class Downloader {
 
 		// Waiting until the download manager completes the request (successful|fail)
 		completion_status_map.put(download_id, false);
+		download_file_map.put(download_id, outputFile);
 		while (!completion_status_map.get(download_id)) {
 			if (Thread.interrupted()) {
 				download_manager.remove(download_id);
@@ -113,8 +128,9 @@ public class Downloader {
 			Thread.yield();
 		}
 
-		// Download is completed
+		// Download is completed, remove associated table entries
 		completion_status_map.remove(download_id);
+		download_file_map.remove(download_id);
 
 		// Unregister the receiver if there is no more submitted requests
 		if (completion_status_map.isEmpty())
